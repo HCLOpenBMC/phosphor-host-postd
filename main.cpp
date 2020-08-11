@@ -90,266 +90,60 @@ void PostCodeEventHandler(sdeventplus::source::IO& s, int postFd, uint32_t,
     s.get_event().exit(1);
 }
 
-#define GPIO_VAL "/sys/class/gpio/gpio%d/value"
-#define GPIO_BASE_NUM 280
-
-#define GPIO_POSTCODE_0 (48 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_1 (49 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_2 (50 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_3 (51 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_4 (124 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_5 (125 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_6 (126 + GPIO_BASE_NUM)
-#define GPIO_POSTCODE_7 (127 + GPIO_BASE_NUM)
-
-#define BIT(value, index) ((value >> index) & 1)
-
-static int write_device(const char* device, const char* value)
-{
-    FILE* fp;
-    int rc;
-
-    std::cout << "write_device()" << std::endl;
-
-    fp = fopen(device, "w");
-    if (!fp)
-    {
-        int err = errno;
-
-        std::cout << "failed to open device for write :" << device << std::endl;
-
-        return err;
-    }
-
-    rc = fputs(value, fp);
-    fclose(fp);
-
-    if (rc < 0)
-    {
-
-        std::cout << "failed to write device" << device << std::endl;
-
-        return ENOENT;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-// Display the given POST code using GPIO port
-static int post_display(uint8_t status)
-{
-    char path[64] = {0};
-    int ret;
-    const char* val;
-
-    std::cout << "post_display: status is" << status << std::endl;
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_0);
-
-    if (BIT(status, 0))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_1);
-    if (BIT(status, 1))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_2);
-    if (BIT(status, 2))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_3);
-    if (BIT(status, 3))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_4);
-    if (BIT(status, 4))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_5);
-    if (BIT(status, 5))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_6);
-    if (BIT(status, 6))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-    sprintf(path, GPIO_VAL, GPIO_POSTCODE_7);
-    if (BIT(status, 7))
-    {
-        val = "1";
-    }
-    else
-    {
-        val = "0";
-    }
-
-    ret = write_device(path, val);
-    if (ret)
-    {
-        goto post_exit;
-    }
-
-post_exit:
-    if (ret)
-    {
-        std::cout << "write_device failed for" << path << std::endl;
-        return -1;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
-PostReporter* ptrReporter;
-
-static void readPostcode(uint8_t postcode, uint8_t host)
-{
-    uint64_t code = 0;
-
-    code = le64toh(postcode);
-
-    fprintf(stderr, "Code: 0x%" PRIx64 "\n", code);
-
-    switch (host)
-    {
-        case 1:
-            // HACK: Always send property changed signal even for the same code
-            // since we are single threaded, external users will never see the
-            // first value.
-            ptrReporter->value0(~code, true);
-            ptrReporter->value0(code);
-            break;
-
-        case 2:
-            ptrReporter->value1(~code, true);
-            ptrReporter->value1(code);
-            break;
-
-        case 3:
-            ptrReporter->value0(~code, true);
-            ptrReporter->value0(code);
-            break;
-
-        case 4:
-            ptrReporter->value1(~code, true);
-            ptrReporter->value1(code);
-            break;
-
-        default:
-            break;
-    }
-
-    // read depends on old data being cleared since it doens't always read
-    // the full code size
-    code = 0;
-
-    // Display postcode received from IPMB
-    post_display(postcode);
-}
-
 void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
                          bool deferSignals)
 {
     int rc = 0;
 
+    printf("PostCodeIpmiHandler\n");
+    printf("HCL3\n");
+
+    std::cout.flush();
+
     auto bus = sdbusplus::bus::new_default();
 
-    // Add systemd object manager.
-    sdbusplus::server::manager::manager(bus, snoopObject);
+    // const char* objPathInst = "xyz.openbmc_project.Host0.State.Boot.Raw";
+    // const char* busPathInst = "/xyz/openbmc_project/Host0/state/boot/raw";
 
-    PostReporter reporter(bus, snoopObject, deferSignals);
-    reporter.emit_object_added();
-    bus.request_name(snoopDbus);
+    auto objPathInst = std::string{snoopObject};
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter(bus, objPathInst.c_str(), deferSignals);
 
     ptrReporter = &reporter;
 
+#if 0
+
+    objPathInst = std::string{snoopObject} + '1';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter1(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter1 = &reporter1;
+
+    objPathInst = std::string{snoopObject} + '2';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter2(bus, objPathInst.c_str(), deferSignals);
+   
+    ptrReporter2 = &reporter2;
+
+    objPathInst = std::string{snoopObject} + '3';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter3(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter3 = &reporter3;
+
+#endif
+
+    reporter.emit_object_added();
+    // reporter1.emit_object_added();
+    // reporter2.emit_object_added();
+    // reporter3.emit_object_added();
+    bus.request_name(snoopDbus);
+
+#if 0
     try
     {
         sdeventplus::Event event = sdeventplus::Event::get_default();
@@ -361,6 +155,23 @@ void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
     {
         fprintf(stderr, "%s\n", e.what());
     }
+#endif
+
+    while (true)
+    {
+        bus.process_discard();
+        printf("bus.wait\n");
+        printf("HCL4\n");
+        std::cout.flush();
+        bus.wait();
+        printf("bus.wait\n");
+        printf("HCL5\n");
+        std::cout.flush();
+    }
+    printf("bus.wait\n");
+    printf("HCL6\n");
+    std::cout.flush();
+    exit(EXIT_SUCCESS);
 }
 
 /*
@@ -418,6 +229,8 @@ int main(int argc, char* argv[])
                 break;
             case 'd':
                 snoopFilename = optarg;
+                printf("HCL1\n");
+                std::cout.flush();
                 PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
                 break;
             case 'v':
@@ -425,6 +238,8 @@ int main(int argc, char* argv[])
                 break;
             case 'i':
                 verbose = true;
+                printf("HCL2\n");
+                std::cout.flush();
                 PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
                 break;
             default:
