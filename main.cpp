@@ -32,8 +32,13 @@
 #include <sdeventplus/source/io.hpp>
 #include <thread>
 
+// busctl call xyz.openbmc_project.State.Boot.Raw
+// /xyz/openbmc_project/state/boot/raw1 xyz.openbmc_project.State.Boot.Raw
+// readPostcode qq 9 1
+
 static const char* snoopFilename = "/dev/aspeed-lpc-snoop0";
 static size_t codeSize = 1; /* Size of each POST code in bytes */
+static size_t totalHosts;   /* Number of host */
 
 static void usage(const char* name)
 {
@@ -88,6 +93,62 @@ void PostCodeEventHandler(sdeventplus::source::IO& s, int postFd, uint32_t,
         fprintf(stderr, "Failed to read postcode: %s\n", strerror(errno));
     }
     s.get_event().exit(1);
+}
+
+void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
+                         bool deferSignals)
+{
+    int rc = 0;
+
+    printf("PostCodeIpmiHandler\n");
+    std::cout.flush();
+
+    auto bus = sdbusplus::bus::new_default();
+
+    auto objPathInst = std::string{snoopObject} + '1';
+
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter = &reporter;
+
+    objPathInst = std::string{snoopObject} + '2';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter1(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter1 = &reporter1;
+
+    objPathInst = std::string{snoopObject} + '3';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter2(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter2 = &reporter2;
+
+    objPathInst = std::string{snoopObject} + '4';
+    // Add systemd object manager.
+    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
+    PostReporter reporter3(bus, objPathInst.c_str(), deferSignals);
+
+    ptrReporter3 = &reporter3;
+
+    reporter.emit_object_added();
+    reporter1.emit_object_added();
+    reporter2.emit_object_added();
+    reporter3.emit_object_added();
+    bus.request_name(snoopDbus);
+
+    setGPIOOutput();
+
+    while (true)
+    {
+        bus.process_discard();
+        std::cout.flush();
+        bus.wait();
+    }
+    exit(EXIT_SUCCESS);
 }
 
 /*
@@ -145,9 +206,24 @@ int main(int argc, char* argv[])
                 break;
             case 'd':
                 snoopFilename = optarg;
+                PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
                 break;
             case 'v':
                 verbose = true;
+                break;
+            case 'i':
+                verbose = true;
+                totalHosts = atoi(optarg);
+                if (totalHosts)
+                    PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
+                else
+                {
+                    fprintf(stderr,
+                            "Invalid total host number '%s'. Must be "
+                            "an greater than 0.\n",
+                            optarg);
+                    exit(EXIT_FAILURE);
+                }
                 break;
             default:
                 usage(argv[0]);
