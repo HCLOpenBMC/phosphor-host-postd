@@ -46,6 +46,7 @@ executable(
     sdeventplus,
     phosphor_dbus_interfaces,
     libgpiod,
+     
   ],
   cpp_args: boost_args,
   install: true,

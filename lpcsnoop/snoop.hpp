@@ -1,29 +1,10 @@
 #pragma once
 
-#include <gpiod.h>
-#include <unistd.h>
-
-#include <boost/process/io.hpp>
 #include <iostream>
+
 #include <sdbusplus/asio/connection.hpp>
-#include <sdbusplus/asio/object_server.hpp>
-#include <sdbusplus/bus.hpp>
-#include <sdbusplus/server.hpp>
 #include <xyz/openbmc_project/State/Boot/Raw/server.hpp>
-
-
-#include <boost/asio.hpp>
-#include <boost/asio/spawn.hpp>
-#include <sdbusplus/asio/connection.hpp>
-#include <sdbusplus/asio/object_server.hpp>
-#include <sdbusplus/asio/sd_event.hpp>
-#include <sdbusplus/bus.hpp>
-#include <sdbusplus/exception.hpp>
-#include <sdbusplus/server.hpp>
-#include <sdbusplus/timer.hpp>
-
-
-#include <variant>
+#include <gpiod.h>
 
 /* The LPC snoop on port 80h is mapped to this dbus path. */
 #define SNOOP_OBJECTPATH "/xyz/openbmc_project/state/boot/raw"
@@ -32,12 +13,23 @@
 
 #define BIT(value, index) ((value >> index) & 1)
 
+gpiod_line* led0;
+gpiod_line* led1;
+gpiod_line* led2;
+gpiod_line* led3;
+gpiod_line* led4;
+gpiod_line* led5;
+gpiod_line* led6;
+gpiod_line* led7;
+
+using message = sdbusplus::message::message;
+
+static size_t totalHosts; /* Number of host */
+
 template <typename... T>
 using ServerObject = typename sdbusplus::server::object::object<T...>;
 using PostInterface = sdbusplus::xyz::openbmc_project::State::Boot::server::Raw;
 using PostObject = ServerObject<PostInterface>;
-
-using variant = std::variant<int, std::string>;
 
 class PostReporter : public PostObject
 {
@@ -51,24 +43,33 @@ class PostReporter : public PostObject
     {
     }
 
-    void readPostcode(uint16_t postcode, uint16_t host) override;
-    int PostCodeDisplay(uint8_t status);
+    void readPostCode(uint16_t postcode, uint16_t host) override;
+    int PostCodeDisplay(uint8_t status, uint16_t host);
 };
 
-PostReporter* ptrReporter;
-PostReporter* ptrReporter1;
-PostReporter* ptrReporter2;
-PostReporter* ptrReporter3;
+int ReadHostSelectionPos(int& pos)
+{
 
-gpiod_line* led0;
-gpiod_line* led1;
-gpiod_line* led2;
-gpiod_line* led3;
-gpiod_line* led4;
-gpiod_line* led5;
-gpiod_line* led6;
-gpiod_line* led7;
+    static boost::asio::io_service io;
+    auto conn = std::make_shared<sdbusplus::asio::connection>(io);
 
+    auto value = conn->new_method_call(
+        "xyz.openbmc_project.Misc.Ipmi", "/xyz/openbmc_project/misc/ipmi",
+        "xyz.openbmc_project.Misc.Ipmi", "readHostPosition");
+    try
+    {
+        message intMsg = conn->call(value);
+        intMsg.read(pos);
+    }
+    catch (sdbusplus::exception::SdBusError& e)
+    {
+        std::cerr << "Failed to read the host position.\n";
+        return -1;
+    }
+
+    std::cerr << "snoopd : Host position :" << pos << "\n";
+    return 0;
+}
 
 bool setGPIOOutput(void)
 {
@@ -187,11 +188,9 @@ bool setGPIOOutput(void)
     return true;
 }
 
-bool WritePostCode(gpiod_line* gpioLine,
-                                          const char value)
+bool WritePostCode(gpiod_line* gpioLine, const char value)
 {
     int ret;
-    int hostSWPos = 1;
 
     fprintf(stderr, "Display_PostCode: 0x%" PRIx8 "\n", value);
 
@@ -206,100 +205,101 @@ bool WritePostCode(gpiod_line* gpioLine,
 }
 
 // Display the given POST code using GPIO port
-int PostReporter ::PostCodeDisplay(uint8_t status)
+int PostReporter ::PostCodeDisplay(uint8_t status, uint16_t host)
 {
+    int ret;
     char value;
+    int hostSWPos = 0;
 
-    value = (BIT(status, 1)) ? 1 : 0;
-    if (!WritePostCode(led0, value))
+    ret = ReadHostSelectionPos(hostSWPos);
+    if (ret < 0)
     {
-        return -1;
-    }
-
-    value = (BIT(status, 2)) ? 1 : 0;
-    if (!WritePostCode(led1, value))
-    {
-        return -1;
+        std::cerr << "read host position failed.\n";
+        return false;
     }
 
-    value = (BIT(status, 3)) ? 1 : 0;
-    if (!WritePostCode(led2, value))
-    {
-        return -1;
-    }
-    value = (BIT(status, 4)) ? 1 : 0;
-    if (!WritePostCode(led3, value))
-    {
-        return -1;
-    }
+    std::cerr << "HostPhyPos:" << hostSWPos << " HostIndex :" << host << "\n";
+    if (hostSWPos == host)
 
-    value = (BIT(status, 5)) ? 1 : 0;
-    if (!WritePostCode(led4, value))
     {
-        return -1;
-    }
+        std::cerr << "Write postcode into seven segment display\n";
 
-    value = (BIT(status, 6)) ? 1 : 0;
-    if (!WritePostCode(led5, value))
-    {
-        return -1;
-    }
-    value = (BIT(status, 7)) ? 1 : 0;
-    if (!WritePostCode(led6, value))
-    {
-        return -1;
-    }
+        value = (BIT(status, 1)) ? 1 : 0;
+        if (!WritePostCode(led0, value))
+        {
+            return -1;
+        }
 
-    value = (BIT(status, 8)) ? 1 : 0;
-    if (!WritePostCode(led7, value))
-    {
-        return -1;
+        value = (BIT(status, 2)) ? 1 : 0;
+        if (!WritePostCode(led1, value))
+        {
+            return -1;
+        }
+
+        value = (BIT(status, 3)) ? 1 : 0;
+        if (!WritePostCode(led2, value))
+        {
+            return -1;
+        }
+        value = (BIT(status, 4)) ? 1 : 0;
+        if (!WritePostCode(led3, value))
+        {
+            return -1;
+        }
+
+        value = (BIT(status, 5)) ? 1 : 0;
+        if (!WritePostCode(led4, value))
+        {
+            return -1;
+        }
+
+        value = (BIT(status, 6)) ? 1 : 0;
+        if (!WritePostCode(led5, value))
+        {
+            return -1;
+        }
+        value = (BIT(status, 7)) ? 1 : 0;
+        if (!WritePostCode(led6, value))
+        {
+            return -1;
+        }
+
+        value = (BIT(status, 8)) ? 1 : 0;
+        if (!WritePostCode(led7, value))
+        {
+            return -1;
+        }
     }
 
     return 0;
 }
 
-void PostReporter ::readPostcode(uint16_t postcode, uint16_t host)
+std::vector<std::unique_ptr<PostReporter>> reporters;
+
+void PostReporter ::readPostCode(uint16_t postcode, uint16_t host)
 {
     uint64_t code = 0;
 
     // Display postcode received from IPMB
-    PostCodeDisplay(postcode);
+    PostCodeDisplay(postcode, host);
 
     code = le64toh(postcode);
     fprintf(stderr, "Code: 0x%" PRIx64 "\n", code);
 
-    printf("postcode = %d host = %d\n", (int)postcode, (int)host);
+    printf("postcode = %d host = %d totalHosts = %d\n", (int)postcode,
+           (int)host, (int)totalHosts);
     std::cout.flush();
 
-    switch (host)
+    if ((host + 1) <= totalHosts)
     {
-        case 0:
-            // HACK: Always send property changed signal even for the same code
-            // since we are single threaded, external users will never see the
-            // first value.
-            ptrReporter->value(~code, true);
-            ptrReporter->value(code);
-            break;
-
-        case 1:
-            ptrReporter1->value(~code, true);
-            ptrReporter1->value(code);
-            break;
-
-        case 2:
-            ptrReporter2->value(~code, true);
-            ptrReporter2->value(code);
-            break;
-
-        case 3:
-            ptrReporter3->value(~code, true);
-            ptrReporter3->value(code);
-            break;
-
-        default:
-            break;
+        // HACK: Always send property changed signal even for the same code
+        // since we are single threaded, external users will never see the
+        // first value.
+        reporters[host]->value(~code, true);
+        reporters[host]->value(code);
     }
+    else
+        fprintf(stderr, "Invalid Host :%d\n", totalHosts);
 
     // read depends on old data being cleared since it doens't always read
     // the full code size

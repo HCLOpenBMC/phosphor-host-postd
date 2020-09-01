@@ -15,30 +15,12 @@
  */
 
 #include "lpcsnoop/snoop.hpp"
-
-#include <endian.h>
-#include <fcntl.h>
 #include <getopt.h>
-#include <sys/epoll.h>
-#include <systemd/sd-event.h>
-#include <unistd.h>
-
-#include <cstdint>
-#include <exception>
-#include <iostream>
-#include <memory>
-#include <sdeventplus/event.hpp>
-#include <sdeventplus/source/event.hpp>
 #include <sdeventplus/source/io.hpp>
-#include <thread>
-
-// busctl call xyz.openbmc_project.State.Boot.Raw
-// /xyz/openbmc_project/state/boot/raw1 xyz.openbmc_project.State.Boot.Raw
-// readPostcode qq 9 1
+#include <string>
 
 static const char* snoopFilename = "/dev/aspeed-lpc-snoop0";
 static size_t codeSize = 1; /* Size of each POST code in bytes */
-static size_t totalHosts;   /* Number of host */
 
 static void usage(const char* name)
 {
@@ -100,48 +82,27 @@ void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
 {
     int rc = 0;
 
-    printf("PostCodeIpmiHandler\n");
+    printf("PostCodeIpmiHandler : Host %d\n", totalHosts);
     std::cout.flush();
 
     auto bus = sdbusplus::bus::new_default();
 
-    auto objPathInst = std::string{snoopObject} + '1';
+    for (int i = 0; i < totalHosts; i++)
+    {
 
-    // Add systemd object manager.
-    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
-    PostReporter reporter(bus, objPathInst.c_str(), deferSignals);
+        auto objPathInst = std::string{snoopObject} + std::to_string(i + 1);
 
-    ptrReporter = &reporter;
+        std::cout << objPathInst.c_str() << std::endl;
 
-    objPathInst = std::string{snoopObject} + '2';
-    // Add systemd object manager.
-    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
-    PostReporter reporter1(bus, objPathInst.c_str(), deferSignals);
+        /* Create a monitor object and let it do all the rest */
+        reporters.push_back(std::make_unique<PostReporter>(
+            bus, objPathInst.c_str(), deferSignals));
 
-    ptrReporter1 = &reporter1;
+        reporters[i]->emit_object_added();
+    }
 
-    objPathInst = std::string{snoopObject} + '3';
-    // Add systemd object manager.
-    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
-    PostReporter reporter2(bus, objPathInst.c_str(), deferSignals);
-
-    ptrReporter2 = &reporter2;
-
-    objPathInst = std::string{snoopObject} + '4';
-    // Add systemd object manager.
-    sdbusplus::server::manager::manager(bus, objPathInst.c_str());
-    PostReporter reporter3(bus, objPathInst.c_str(), deferSignals);
-
-    ptrReporter3 = &reporter3;
-
-    reporter.emit_object_added();
-    reporter1.emit_object_added();
-    reporter2.emit_object_added();
-    reporter3.emit_object_added();
     bus.request_name(snoopDbus);
-
     setGPIOOutput();
-
     while (true)
     {
         bus.process_discard();
@@ -179,6 +140,7 @@ int main(int argc, char* argv[])
 
     // clang-format off
     static const struct option long_options[] = {
+        {"ipmi", required_argument, NULL, 'i'},
         {"bytes",  required_argument, NULL, 'b'},
         {"device", required_argument, NULL, 'd'},
         {"verbose", no_argument, NULL, 'v'},
@@ -186,11 +148,26 @@ int main(int argc, char* argv[])
     };
     // clang-format on
 
-    while ((opt = getopt_long(argc, argv, "b:d:v", long_options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "i:b:d:v", long_options, NULL)) != -1)
     {
         switch (opt)
         {
             case 0:
+                break;
+            case 'i':
+                verbose = true;
+                totalHosts = atoi(optarg);
+                printf("totalHosts : %d\n", totalHosts);
+                if (totalHosts)
+                    PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
+                else
+                {
+                    fprintf(stderr,
+                            "Invalid total host number '%s'. Must be "
+                            "an greater than 0.\n",
+                            optarg);
+                    exit(EXIT_FAILURE);
+                }
                 break;
             case 'b':
                 codeSize = atoi(optarg);
@@ -206,24 +183,9 @@ int main(int argc, char* argv[])
                 break;
             case 'd':
                 snoopFilename = optarg;
-                PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
                 break;
             case 'v':
                 verbose = true;
-                break;
-            case 'i':
-                verbose = true;
-                totalHosts = atoi(optarg);
-                if (totalHosts)
-                    PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
-                else
-                {
-                    fprintf(stderr,
-                            "Invalid total host number '%s'. Must be "
-                            "an greater than 0.\n",
-                            optarg);
-                    exit(EXIT_FAILURE);
-                }
                 break;
             default:
                 usage(argv[0]);
