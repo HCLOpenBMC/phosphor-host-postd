@@ -15,7 +15,9 @@
  */
 
 #include "lpcsnoop/snoop.hpp"
+
 #include <getopt.h>
+
 #include <sdeventplus/source/io.hpp>
 #include <string>
 
@@ -77,22 +79,16 @@ void PostCodeEventHandler(sdeventplus::source::IO& s, int postFd, uint32_t,
     s.get_event().exit(1);
 }
 
-void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
+void postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
                          bool deferSignals)
 {
-    int rc = 0;
-
-    printf("PostCodeIpmiHandler : Host %d\n", totalHosts);
-    std::cout.flush();
+    int ret = 0;
 
     auto bus = sdbusplus::bus::new_default();
 
-    for (int i = 0; i < totalHosts; i++)
+    for (int i = 0; i < totalHost; i++)
     {
-
         auto objPathInst = std::string{snoopObject} + std::to_string(i + 1);
-
-        std::cout << objPathInst.c_str() << std::endl;
 
         /* Create a monitor object and let it do all the rest */
         reporters.push_back(std::make_unique<PostReporter>(
@@ -102,7 +98,12 @@ void PostCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
     }
 
     bus.request_name(snoopDbus);
-    setGPIOOutput();
+
+    ret = setGPIOOutput();
+    if (ret < 0)
+    {
+        std::cerr << "Failed tind the gpio line\n";
+    }
     while (true)
     {
         bus.process_discard();
@@ -156,14 +157,14 @@ int main(int argc, char* argv[])
                 break;
             case 'i':
                 verbose = true;
-                totalHosts = atoi(optarg);
-                printf("totalHosts : %d\n", totalHosts);
-                if (totalHosts)
-                    PostCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
+                totalHost = atoi(optarg);
+
+                if (totalHost)
+                    postCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
                 else
                 {
                     fprintf(stderr,
-                            "Invalid total host number '%s'. Must be "
+                            "Invalid host number '%s'. Must be "
                             "an greater than 0.\n",
                             optarg);
                     exit(EXIT_FAILURE);
