@@ -1,7 +1,6 @@
 #pragma once
 
-#include <gpiod.h>
-
+#include <gpiod.hpp>
 #include <iostream>
 #include <sdbusplus/asio/connection.hpp>
 #include <xyz/openbmc_project/State/Boot/Raw/server.hpp>
@@ -15,6 +14,7 @@ using message = sdbusplus::message::message;
 
 static size_t totalHost; /* Number of host */
 
+// libgpiod obj for seven segment display
 std::vector<gpiod_line*> leds;
 
 template <typename... T>
@@ -38,12 +38,17 @@ class PostReporter : public PostObject
     int postCodeDisplay(uint8_t status, uint16_t host);
 };
 
+// There should be hard or soft logic in the front panel to select the host
+// to display the correposnding postcode in mult-host platform.
+// This method reads the host position from the D-bus interface expose by
+// other process and display it in the seven segment display based on the match.
 int readHostSelectionPos(int& pos)
 {
 
     static boost::asio::io_service io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
-
+    // Below D-Bus interfaces should be expose by other services to update the
+    // host position
     auto value = conn->new_method_call("xyz.openbmc_project.Misc.Frontpanel",
                                        "/xyz/openbmc_project/misc/frontpanel",
                                        "xyz.openbmc_project.Misc.Frontpanel",
@@ -59,16 +64,17 @@ int readHostSelectionPos(int& pos)
         return -1;
     }
 
-    std::cerr << "snoopd : Host position :" << pos << "\n";
     return 0;
 }
 
-int setGPIOOutput(void)
+// Configure the seven segment display connected GPIOs direction
+int configGPIODirOutput(void)
 {
     int ret;
     gpiod_line* led;
     std::string gpio;
     int iteration;
+    // Need to define gpio names LED_POST_CODE_0 to 8 in dts file
     std::string gpioName = "LED_POST_CODE_";
 
     for (int iteration = 0; iteration < 8; iteration++)
@@ -99,7 +105,7 @@ int writePostCode(gpiod_line* gpioLine, const char value)
     int ret;
 
     fprintf(stderr, "Display_PostCode: 0x%" PRIx8 "\n", value);
-
+    // Write the postcode into GPIOs
     ret = gpiod_line_set_value(gpioLine, value);
     if (ret < 0)
     {
@@ -110,25 +116,29 @@ int writePostCode(gpiod_line* gpioLine, const char value)
     return 0;
 }
 
-// Display the given POST code using GPIO port
+// Display the received postcode into seven segment display
 int PostReporter ::postCodeDisplay(uint8_t status, uint16_t host)
 {
     int ret;
-    int iteration;
     char value;
-    int hostSWPos = 0;
+    int hostSWPos = -1;
 
     ret = readHostSelectionPos(hostSWPos);
     if (ret < 0)
     {
-        std::cerr << "read host position failed.\n";
+        std::cerr << "Read host position failed.\n";
         return -1;
     }
-
+    //
     if (hostSWPos == host)
     {
-        for (iteration = 0; iteration < 8; iteration++)
+        /*
+         * 8 GPIOs connected to seven segment display from BMC
+         * to display postcode
+         */
+        for (int iteration = 0; iteration < 8; iteration++)
         {
+            // spilt byte to write into GPIOs
             value = (status >> iteration) & 1;
             ret = writePostCode(leds[iteration], value);
             if (ret < 0)
@@ -142,22 +152,30 @@ int PostReporter ::postCodeDisplay(uint8_t status, uint16_t host)
     return 0;
 }
 
+// To handle multi-host postcode
 std::vector<std::unique_ptr<PostReporter>> reporters;
 
+/*
+ * This D-Bus method exposesd to other services through phosphor-dbus-interfaces
+ * Other services calls this method to send the post code after port 80 received
+ * from host with corresponding host id. The expected host-id starts with 0 for
+ * first host.
+ */
 void PostReporter ::readPostCode(uint16_t postcode, uint16_t host)
 {
     int ret;
     uint64_t code = 0;
 
-    // Display postcode received from IPMB
+    // write postcode into seven segment display
     ret = postCodeDisplay(postcode, host);
     if (ret < 0)
     {
-        std::cerr << "error in display the postcode\n";
+        std::cerr << "Error in display the postcode\n";
     }
 
     code = le64toh(postcode);
 
+    // The expected host id must be 0.
     if ((host + 1) <= totalHost)
     {
         // HACK: Always send property changed signal even for the same code
@@ -167,7 +185,9 @@ void PostReporter ::readPostCode(uint16_t postcode, uint16_t host)
         reporters[host]->value(code);
     }
     else
+    {
         fprintf(stderr, "Invalid Host :%d\n", totalHost);
+    }
 
     // read depends on old data being cleared since it doens't always read
     // the full code size

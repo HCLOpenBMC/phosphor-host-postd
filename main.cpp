@@ -17,7 +17,6 @@
 #include "lpcsnoop/snoop.hpp"
 
 #include <getopt.h>
-
 #include <sdeventplus/source/io.hpp>
 #include <string>
 
@@ -79,6 +78,7 @@ void PostCodeEventHandler(sdeventplus::source::IO& s, int postFd, uint32_t,
     s.get_event().exit(1);
 }
 
+// handle muti-host D-bus
 void postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
                          bool deferSignals)
 {
@@ -99,10 +99,11 @@ void postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
 
     bus.request_name(snoopDbus);
 
-    ret = setGPIOOutput();
+    // Configure seven segment dsiplay connected to GPIOs as output
+    ret = configGPIODirOutput();
     if (ret < 0)
     {
-        std::cerr << "Failed tind the gpio line\n";
+        std::cerr << "Failed find the gpio line\n";
     }
     while (true)
     {
@@ -156,15 +157,16 @@ int main(int argc, char* argv[])
             case 0:
                 break;
             case 'i':
-                verbose = true;
                 totalHost = atoi(optarg);
 
                 if (totalHost)
+                {
                     postCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
+                }
                 else
                 {
                     fprintf(stderr,
-                            "Invalid host number '%s'. Must be "
+                            "Invalid host count '%s'. Must be "
                             "an greater than 0.\n",
                             optarg);
                     exit(EXIT_FAILURE);
