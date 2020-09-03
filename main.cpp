@@ -158,7 +158,6 @@ int main(int argc, char* argv[])
                 break;
             case 'i':
                 totalHost = atoi(optarg);
-
                 if (totalHost)
                 {
                     postCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
