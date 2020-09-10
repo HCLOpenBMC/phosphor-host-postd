@@ -24,7 +24,6 @@ boost_args = ['-DBOOST_ASIO_DISABLE_THREADS',
               '-DBOOST_ERROR_CODE_HEADER_ONLY',
               '-DBOOST_SYSTEM_NO_DEPRECATED']
 
-
 conf_data = configuration_data()
 conf_data.set('bindir', get_option('prefix') / get_option('bindir'))
 conf_data.set('SNOOP_DEVICE', get_option('snoop-device'))
@@ -91,7 +90,9 @@ endif
 install_headers(
   'lpcsnoop/snoop.hpp',
   'lpcsnoop/snoop_listen.hpp',
-  subdir: 'lpcsnoop')
+  'ipmisnoop/ipmisnoop.hpp',
+  subdir: 'lpcsnoop',
+  subdir: 'ipmisnoop')
 
 if not build_tests.disabled()
   subdir('test')

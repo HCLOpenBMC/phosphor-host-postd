@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include "ipmisnoop/ipmisnoop.hpp"
 #include "lpcsnoop/snoop.hpp"
 
 #include <getopt.h>
+
 #include <sdeventplus/source/io.hpp>
 #include <string>
 
@@ -79,22 +81,34 @@ void PostCodeEventHandler(sdeventplus::source::IO& s, int postFd, uint32_t,
 }
 
 // handle muti-host D-bus
-void postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
-                         bool deferSignals)
+int postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus)
 {
     int ret = 0;
 
+    sd_event* event = nullptr;
+    ret = sd_event_default(&event);
+    if (ret < 0)
+    {
+        std::cerr << "Error creating a default sd_event handler\n";
+        return ret;
+    }
+    EventPtr eventP{event};
+    event = nullptr;
+
     auto bus = sdbusplus::bus::new_default();
 
-    for (int i = 0; i < totalHost; i++)
+    for (int iteration = 0; iteration < numOfHost; iteration++)
     {
-        auto objPathInst = std::string{snoopObject} + std::to_string(i + 1);
+        auto objPathInst =
+            std::string{snoopObject} + std::to_string(iteration + 1);
+
+        sdbusplus::server::manager_t m{bus, objPathInst.c_str()};
 
         /* Create a monitor object and let it do all the rest */
-        reporters.push_back(std::make_unique<PostReporter>(
-            bus, objPathInst.c_str(), deferSignals));
+        reporters.push_back(std::make_unique<IpmiPostReporter>(
+            bus, objPathInst.c_str(), eventP));
 
-        reporters[i]->emit_object_added();
+        reporters[iteration]->emit_object_added();
     }
 
     bus.request_name(snoopDbus);
@@ -105,12 +119,21 @@ void postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus,
     {
         std::cerr << "Failed find the gpio line\n";
     }
-    while (true)
+
+    try
     {
-        bus.process_discard();
-        std::cout.flush();
-        bus.wait();
+        bus.attach_event(eventP.get(), SD_EVENT_PRIORITY_NORMAL);
+        ret = sd_event_loop(eventP.get());
+        if (ret < 0)
+        {
+            std::cerr << "Error occurred during the sd_event_loop\n";
+        }
     }
+    catch (std::exception& e)
+    {
+        return -1;
+    }
+
     exit(EXIT_SUCCESS);
 }
 
@@ -157,10 +180,15 @@ int main(int argc, char* argv[])
             case 0:
                 break;
             case 'i':
-                totalHost = atoi(optarg);
-                if (totalHost)
+                numOfHost = atoi(optarg);
+                if (numOfHost)
                 {
-                    postCodeIpmiHandler(snoopObject, snoopDbus, deferSignals);
+                    rc = postCodeIpmiHandler(snoopObject, snoopDbus);
+                    if (codeSize < 0)
+                    {
+                        fprintf(stderr, "Failed to create object\n");
+                        exit(EXIT_FAILURE);
+                    }
                 }
                 else
                 {
