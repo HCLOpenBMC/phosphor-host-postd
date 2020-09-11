@@ -22,10 +22,6 @@ udevrulesdir = $(UDEVRULESDIR)
 udevrules_DATA = 80-7seg.rules
 endif # ENABLE_7SEG
 
-libdir=/usr/lib
-LIBGPIOD_LIBS = -L${libdir} -lgpiod
-LIBGPIOD_CFLAGS = /usr/include
-
 snoopd_SOURCES = main.cpp
 snoopd_LDADD = $(SDBUSPLUS_LIBS) $(SDEVENTPLUS_LIBS) $(PHOSPHOR_DBUS_INTERFACES_LIBS) $(LIBGPIOD_LIBS)-lpthread
 snoopd_CXXFLAGS = $(SDBUSPLUS_CFLAGS) $(SDEVENTPLUS_CFLAGS) $(PHOSPHOR_DBUS_INTERFACES_CFLAGS) $(LIBGPIOD_CFLAGS)

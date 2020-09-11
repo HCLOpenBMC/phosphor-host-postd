@@ -91,9 +91,6 @@ struct IpmiPostReporter : PostObject
     int postCodeDisplay(uint8_t status, uint16_t host);
 };
 
-// To handle multi-host postcode
-std::vector<std::unique_ptr<IpmiPostReporter>> reporters;
-
 // There should be hard or soft logic in the front panel to select the host
 // to display the correposnding postcode in mult-host platform.
 // This method reads the host position from the D-bus interface expose by

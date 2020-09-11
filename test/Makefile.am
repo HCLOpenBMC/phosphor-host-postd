@@ -1,10 +1,6 @@
 # Common flags for all binaries in this subdirectory.
 # Per-program specific flags can be specified using
 # prg_CPPFLAGS = ....
-libdir=/usr/lib
-LIBGPIOD_LIBS = -L${libdir} -lgpiod
-LIBGPIOD_CFLAGS = /usr/include
-
 AM_CPPFLAGS = -I${top_srcdir} \
               $(GTEST_CFLAGS) \
               $(GMOCK_CFLAGS) \
