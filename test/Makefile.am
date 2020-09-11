@@ -17,7 +17,7 @@ AM_LDFLAGS = $(GTEST_LIBS) \
              $(OESDK_TESTCASE_FLAGS) \
              $(SDBUSPLUS_LIBS) \
              $(PHOSPHOR_DBUS_INTERFACES_LIBS) \
-             $(LIBGPIOD_LIBS) \
+             $(LIBGPIOD_LIBS)
 
 # The list of unit test programs we are building and running.
 check_PROGRAMS = post_reporter_test

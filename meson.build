@@ -91,8 +91,7 @@ install_headers(
   'lpcsnoop/snoop.hpp',
   'lpcsnoop/snoop_listen.hpp',
   'ipmisnoop/ipmisnoop.hpp',
-  subdir: 'lpcsnoop',
-  subdir: 'ipmisnoop')
+  subdir: 'lpcsnoop, ipmisnoop')
 
 if not build_tests.disabled()
   subdir('test')

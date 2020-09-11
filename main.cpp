@@ -85,16 +85,6 @@ int postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus)
 {
     int ret = 0;
 
-    sd_event* event = nullptr;
-    ret = sd_event_default(&event);
-    if (ret < 0)
-    {
-        std::cerr << "Error creating a default sd_event handler\n";
-        return ret;
-    }
-    EventPtr eventP{event};
-    event = nullptr;
-
     auto bus = sdbusplus::bus::new_default();
 
     for (int iteration = 0; iteration < numOfHost; iteration++)
@@ -105,8 +95,8 @@ int postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus)
         sdbusplus::server::manager_t m{bus, objPathInst.c_str()};
 
         /* Create a monitor object and let it do all the rest */
-        reporters.push_back(std::make_unique<IpmiPostReporter>(
-            bus, objPathInst.c_str(), eventP));
+        reporters.push_back(
+            std::make_unique<IpmiPostReporter>(bus, objPathInst.c_str()));
 
         reporters[iteration]->emit_object_added();
     }
@@ -120,20 +110,12 @@ int postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus)
         std::cerr << "Failed find the gpio line\n";
     }
 
-    try
+    while (true)
     {
-        bus.attach_event(eventP.get(), SD_EVENT_PRIORITY_NORMAL);
-        ret = sd_event_loop(eventP.get());
-        if (ret < 0)
-        {
-            std::cerr << "Error occurred during the sd_event_loop\n";
-        }
+        bus.process_discard();
+        std::cout.flush();
+        bus.wait();
     }
-    catch (std::exception& e)
-    {
-        return -1;
-    }
-
     exit(EXIT_SUCCESS);
 }
 
@@ -184,7 +166,7 @@ int main(int argc, char* argv[])
                 if (numOfHost)
                 {
                     rc = postCodeIpmiHandler(snoopObject, snoopDbus);
-                    if (codeSize < 0)
+                    if (rc < 0)
                     {
                         fprintf(stderr, "Failed to create object\n");
                         exit(EXIT_FAILURE);
