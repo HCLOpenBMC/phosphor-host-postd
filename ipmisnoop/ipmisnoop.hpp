@@ -47,10 +47,6 @@ struct IpmiPostReporter : PostObject
                     if (valPropMap != msgData.end())
                     {
                         int ret;
-                        std::cout << "postcode  : "
-                                  << std::get<uint64_t>(valPropMap->second)
-                                  << "\n";
-                        std::cout.flush();
                         // write postcode into seven segment display
                         ret = postCodeDisplay(
                             std::get<uint64_t>(valPropMap->second), hostNum);
@@ -88,10 +84,11 @@ int readHostSelectionPos(int& pos)
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
 
     auto method =
-        conn->new_method_call("xyz.openbmc_project.Misc.Frontpanel",
-                              "/xyz/openbmc_project/misc/frontpanel",
+        conn->new_method_call("xyz.openbmc_project.Chassis.Event",
+                              "/xyz/openbmc_project/Chassis/Event",
                               "org.freedesktop.DBus.Properties", "Get");
-    method.append("xyz.openbmc_project.Misc.Frontpanel", "SwPos");
+
+    method.append("xyz.openbmc_project.Chassis.Event", "Position");
 
     auto reply = conn->call(method);
     if (reply.is_method_error())
@@ -105,7 +102,6 @@ int readHostSelectionPos(int& pos)
 
     pos = std::get<int>(resp);
 
-    std::cout << "Host Position  : " << pos << "\n";
     return 0;
 }
 
@@ -143,7 +139,6 @@ int writePostCode(gpiod_line* gpioLine, const char value)
 {
     int ret;
 
-    fprintf(stderr, "Display_PostCode: 0x%" PRIx8 "\n", value);
     // Write the postcode into GPIOs
     ret = gpiod_line_set_value(gpioLine, value);
     if (ret < 0)

@@ -113,7 +113,6 @@ int postCodeIpmiHandler(const char* snoopObject, const char* snoopDbus)
     while (true)
     {
         bus.process_discard();
-        std::cout.flush();
         bus.wait();
     }
     exit(EXIT_SUCCESS);
