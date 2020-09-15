@@ -20,7 +20,6 @@
 #include <getopt.h>
 
 #include <sdeventplus/source/io.hpp>
-#include <string>
 
 static const char* snoopFilename = "/dev/aspeed-lpc-snoop0";
 static size_t codeSize = 1; /* Size of each POST code in bytes */
