@@ -83,24 +83,33 @@ int readHostSelectionPos(int& pos)
     static boost::asio::io_context io;
     auto conn = std::make_shared<sdbusplus::asio::connection>(io);
 
-    auto method =
-        conn->new_method_call("xyz.openbmc_project.Chassis.Event",
-                              "/xyz/openbmc_project/Chassis/Event",
-                              "org.freedesktop.DBus.Properties", "Get");
+    try
+    {
 
-    method.append("xyz.openbmc_project.Chassis.Event", "Position");
+        auto method = conn->new_method_call(
+            "xyz.openbmc_project.Chassis.Buttons",
+            "/xyz/openbmc_project/Chassis/Buttons/Selector0",
+            "org.freedesktop.DBus.Properties", "Get");
 
-    auto reply = conn->call(method);
-    if (reply.is_method_error())
+        method.append("xyz.openbmc_project.Chassis.Buttons.Selector",
+                      "Position");
+
+        auto reply = conn->call(method);
+        if (reply.is_method_error())
+        {
+
+            return -1;
+        }
+
+        std::variant<int> resp;
+        reply.read(resp);
+
+        pos = std::get<int>(resp);
+    }
+    catch (...)
     {
         std::cerr << "Error reading host switch position" << std::endl;
-        return -1;
     }
-
-    std::variant<int> resp;
-    reply.read(resp);
-
-    pos = std::get<int>(resp);
 
     return 0;
 }
