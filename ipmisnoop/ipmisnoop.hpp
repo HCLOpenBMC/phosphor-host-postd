@@ -77,7 +77,7 @@ std::vector<std::unique_ptr<IpmiPostReporter>> reporters;
 // to display the correposnding postcode in mult-host platform.
 // This method reads the host position from the D-bus interface expose by
 // other process and display it in the seven segment display based on the match.
-int readHostSelectionPos(int& pos)
+int readHostSelectionPos(uint16_t& pos)
 {
 
     static boost::asio::io_context io;
@@ -101,10 +101,10 @@ int readHostSelectionPos(int& pos)
             return -1;
         }
 
-        std::variant<int> resp;
+        std::variant<uint16_t> resp;
         reply.read(resp);
 
-        pos = std::get<int>(resp);
+        pos = std::get<uint16_t>(resp);
     }
     catch (...)
     {
@@ -163,7 +163,7 @@ int writePostCode(gpiod_line* gpioLine, const char value)
 int IpmiPostReporter ::postCodeDisplay(uint8_t status, uint16_t host)
 {
     int ret;
-    int hostSWPos = -1;
+    uint16_t hostSWPos = 1; // Set host1 as default
 
     ret = readHostSelectionPos(hostSWPos);
     if (ret < 0)
@@ -171,9 +171,12 @@ int IpmiPostReporter ::postCodeDisplay(uint8_t status, uint16_t host)
         std::cerr << "Read host position failed.\n";
         return -1;
     }
+
+    std::cerr << "hostSWPos : " << hostSWPos << "host :  " << host << "\n";
     //
     if (hostSWPos == host)
     {
+        // std::cerr << "Postcode display" <<  "\n";
         /*
          * 8 GPIOs connected to seven segment display from BMC
          * to display postcode
